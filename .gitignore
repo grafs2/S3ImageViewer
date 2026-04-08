@@ -1,0 +1,13 @@
+# Local database
+cache.db
+cache.db-wal
+cache.db-shm
+
+# Logs
+*.log
+
+# Python environment and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/

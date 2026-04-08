@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>S3 Bildgalerie: {{ bucket }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="sidebar" data-current-prefix="{{ current_prefix }}">
+      <h2>Ordner</h2>
+      {% macro render_tree(nodes) %}
+        <ul>
+          {% for node in nodes %}
+            <li>
+              <div class="tree-row">
+                {% if node.children %}
+                  <span class="tree-toggle" data-target="children-{{ node.path | replace('/', '-') }}">&#9658;</span>
+                {% else %}
+                  <span class="tree-leaf"></span>
+                {% endif %}
+                <a href="{{ url_for('gallery', prefix=node.path) }}"
+                   class="{{ 'active' if node.path == current_prefix else '' }}"
+                   data-path="{{ node.path }}">
+                  {{ node.name }}
+                </a>
+              </div>
+              {% if node.children %}
+                <div class="tree-children" id="children-{{ node.path | replace('/', '-') }}">
+                  {{ render_tree(node.children) }}
+                </div>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% endmacro %}
+      {{ render_tree(folder_tree) }}
+    </aside>
+
+    <main class="content">
+
+      <div class="cache-bar">
+        <span class="cache-info">
+          Cache: {{ cache.total_images }} Bilder
+          &mdash; Zuletzt aktualisiert: {{ cache.last_rebuilt }}
+        </span>
+
+        {% if cache.rebuild_state == 'running' %}
+          <div class="sync-progress" id="sync-progress">
+            <span class="sync-label" id="sync-label">
+              {% if cache.sync_type == 'delta' %}Delta Sync{% else %}Vollständiger Aufbau{% endif %}
+              {% if cache.progress_total > 0 %}
+                &mdash; {{ cache.progress_current }} / {{ cache.progress_total }}
+              {% else %}
+                &mdash; Scanne S3&hellip;
+              {% endif %}
+            </span>
+            {% if cache.progress_total > 0 %}
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" id="progress-bar-fill"
+                     data-pct="{{ (cache.progress_current / cache.progress_total * 100)|int }}"></div>
+              </div>
+            {% else %}
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-fill progress-indeterminate" id="progress-bar-fill"></div>
+              </div>
+            {% endif %}
+          </div>
+        {% else %}
+          <form method="post" action="{{ url_for('delta_sync') }}" style="display:inline">
+            <input type="hidden" name="prefix" value="{{ current_prefix }}">
+            <button type="submit" class="delta-btn">Delta Sync</button>
+          </form>
+          <form method="post" action="{{ url_for('rebuild') }}" style="display:inline">
+            <input type="hidden" name="prefix" value="{{ current_prefix }}">
+            <button type="submit" class="rebuild-btn">Cache aufbauen</button>
+          </form>
+          <a href="{{ url_for('stats') }}" class="stats-btn">DB Stats</a>
+        {% endif %}
+      </div>
+
+      <h1>{{ current_prefix or bucket }}</h1>
+
+      {% if images %}
+        <div class="gallery">
+          {% for img in images %}
+            <div class="thumb">
+              <a href="{{ img.url }}" target="_blank">
+                <img src="{{ url_for('serve_thumb', key=img.key) }}"
+                     alt="{{ img.name }}"
+                     loading="lazy">
+              </a>
+              <small>{{ img.name }}</small>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>Keine Bilder in diesem Ordner.</p>
+      {% endif %}
+
+    </main>
+  </div>
+
+  <script>
+    // --- Collapsible folder tree ---
+    (function () {
+      var currentPath = document.querySelector('.sidebar').dataset.currentPrefix || '';
+
+      // Expand all ancestor folders of the active path
+      function expandAncestors(path) {
+        var parts = path.replace(/\/$/, '').split('/');
+        var accumulated = '';
+        for (var i = 0; i < parts.length; i++) {
+          accumulated += parts[i] + '/';
+          var id = 'children-' + accumulated.replace(/\//g, '-');
+          var el = document.getElementById(id);
+          if (el) {
+            el.classList.add('open');
+            var toggle = el.previousElementSibling && el.previousElementSibling.querySelector('.tree-toggle');
+            // find the toggle in the same tree-row sibling
+            var row = el.previousElementSibling;
+            if (row) {
+              var t = row.querySelector('.tree-toggle');
+              if (t) t.classList.add('open');
+            }
+          }
+        }
+      }
+
+      // Toggle click handler
+      document.querySelectorAll('.tree-toggle').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var targetId = btn.dataset.target;
+          var children = document.getElementById(targetId);
+          if (!children) return;
+          var isOpen = children.classList.toggle('open');
+          btn.classList.toggle('open', isOpen);
+        });
+      });
+
+      if (currentPath) {
+        expandAncestors(currentPath);
+      }
+    })();
+
+    // --- Sync progress polling ---
+    (function () {
+      var progressWrap = document.getElementById('sync-progress');
+      if (!progressWrap) return;  // not running
+
+      var labelEl = document.getElementById('sync-label');
+      var fillEl  = document.getElementById('progress-bar-fill');
+
+      // Apply initial percentage from server-rendered data attribute
+      if (fillEl && fillEl.dataset.pct) {
+        fillEl.style.width = fillEl.dataset.pct + '%';
+      }
+
+      var poll = setInterval(function () {
+        fetch('/cache_status')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.rebuild_state !== 'running') {
+              clearInterval(poll);
+              window.location.reload();
+              return;
+            }
+
+            var syncName = d.sync_type === 'delta' ? 'Delta Sync' : 'Vollständiger Aufbau';
+            if (d.progress_total > 0) {
+              var pct = Math.round(d.progress_current / d.progress_total * 100);
+              labelEl.textContent = syncName + ' \u2014 ' + d.progress_current + ' / ' + d.progress_total + ' (' + pct + '%)';
+              fillEl.classList.remove('progress-indeterminate');
+              fillEl.style.width = pct + '%';
+            } else {
+              labelEl.textContent = syncName + ' \u2014 Scanne S3\u2026';
+              fillEl.classList.add('progress-indeterminate');
+              fillEl.style.width = '';
+            }
+          });
+      }, 1500);
+    })();
+  </script>
+</body>
+</html>
