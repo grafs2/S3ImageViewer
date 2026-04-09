@@ -1,0 +1,7 @@
+{
+  "BUCKET_NAME": "grafs2backup",
+  "REGION": "eu-central-1",
+  "USE_PRESIGNED": true,
+  "THUMB_WIDTH": 300,
+  "THUMB_QUALITY": 70
+}

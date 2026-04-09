@@ -27,14 +27,17 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# === Adjust Configuration ===
-BUCKET_NAME = "grafs2backup"
-REGION = "eu-central-1"
-USE_PRESIGNED = True  # False if public
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    _config = json.load(f)
+
+BUCKET_NAME = _config.get("BUCKET_NAME")
+REGION = _config.get("REGION")
+USE_PRESIGNED = _config.get("USE_PRESIGNED", True)
+THUMB_WIDTH = _config.get("THUMB_WIDTH", 300)
+THUMB_QUALITY = _config.get("THUMB_QUALITY", 70)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "cache.db")
-THUMB_WIDTH = 300
-THUMB_QUALITY = 70
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
 
 s3 = boto3.client("s3", region_name=REGION)

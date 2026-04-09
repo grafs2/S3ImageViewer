@@ -34,14 +34,28 @@ aws_access_key_id = YOUR_ACCESS_KEY_ID
 aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
 ```
 
-**3. Configure the bucket**
+**3. Configuration**
 
-Edit the top of `app.py`:
-```python
-BUCKET_NAME = "your-bucket-name"
-REGION = "eu-central-1"        # your bucket's region
-USE_PRESIGNED = True           # True for private buckets, False for public
+The application uses a `config.json` file for settings. Create or edit it in the project root:
+```json
+{
+  "BUCKET_NAME": "your-bucket-name",
+  "REGION": "eu-central-1",
+  "USE_PRESIGNED": true,
+  "THUMB_WIDTH": 300,
+  "THUMB_QUALITY": 70
+}
 ```
+
+### Configuration Parameters
+
+| Parameter | Description |
+|---|---|
+| `BUCKET_NAME` | The name of your AWS S3 bucket. |
+| `REGION` | The AWS region where your bucket is located (e.g., `eu-central-1`). |
+| `USE_PRESIGNED` | **Security Toggle**: If `true`, the app generates temporary pre-signed URLs (1-hour expiry). This allows you to keep your bucket private. If `false`, it uses public URLs (requires public read access on S3). |
+| `THUMB_WIDTH` | The target width (in pixels) for generated thumbnails. |
+| `THUMB_QUALITY` | The JPEG compression quality (1-100) for stored thumbnails. |
 
 ## Running
 
