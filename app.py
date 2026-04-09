@@ -27,10 +27,10 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# === Konfiguration anpassen ===
+# === Adjust Configuration ===
 BUCKET_NAME = "grafs2backup"
 REGION = "eu-central-1"
-USE_PRESIGNED = True  # False, falls öffentlich
+USE_PRESIGNED = True  # False if public
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "cache.db")
 THUMB_WIDTH = 300
@@ -175,7 +175,7 @@ def _get_folder_tree_from_s3(prefix='') -> list:
             folders.append({'name': name, 'path': folder_path, 'children': children})
         return folders
     except Exception as e:
-        log.error("Fehler beim Laden des Ordnerbaums für Prefix '%s': %s", prefix, e)
+        log.error("Error loading folder tree for prefix '%s': %s", prefix, e)
         return []
 
 
@@ -231,7 +231,7 @@ def _rebuild_cache_worker():
             )
 
         # Step 1: collect all image keys
-        log.info("[Rebuild] Scanne S3-Bucket '%s'...", BUCKET_NAME)
+        log.info("[Rebuild] Scanning S3 bucket '%s'...", BUCKET_NAME)
         all_keys = []
         current_prefix = None
         paginator = s3.get_paginator('list_objects_v2')
@@ -242,9 +242,9 @@ def _rebuild_cache_worker():
                     prefix = key.rsplit('/', 1)[0] + '/' if '/' in key else ''
                     if prefix != current_prefix:
                         current_prefix = prefix
-                        log.info("[Rebuild] Verzeichnis: %s", current_prefix or '/')
+                        log.info("[Rebuild] Directory: %s", current_prefix or '/')
                     all_keys.append(key)
-        log.info("[Rebuild] %d Bilder gefunden.", len(all_keys))
+        log.info("[Rebuild] %d images found.", len(all_keys))
 
         total = len(all_keys)
         _set_progress(0, total)
@@ -272,7 +272,7 @@ def _rebuild_cache_worker():
             )
 
         # Step 4: thumbnails
-        log.info("[Rebuild] Erstelle Thumbnails...")
+        log.info("[Rebuild] Creating thumbnails...")
         count = 0
         current_prefix = None
         for i, key in enumerate(all_keys):
@@ -290,7 +290,7 @@ def _rebuild_cache_worker():
                 )
                 count += 1
             except Exception as e:
-                log.error("[Rebuild] Fehler bei '%s': %s", key, e)
+                log.error("[Rebuild] Error at '%s': %s", key, e)
             _set_progress(i + 1, total)
 
         with get_db() as conn:
@@ -298,10 +298,10 @@ def _rebuild_cache_worker():
                 "UPDATE cache_meta SET last_rebuilt=?, total_images=?, rebuild_state='idle', sync_type='idle' WHERE id=1",
                 (datetime.now(timezone.utc).isoformat(), count)
             )
-        log.info("[Rebuild] Fertig. %d Thumbnails gespeichert.", count)
+        log.info("[Rebuild] Done. %d thumbnails saved.", count)
 
     except Exception as e:
-        log.error("[Rebuild] Abgebrochen mit Fehler: %s", e)
+        log.error("[Rebuild] Aborted with error: %s", e)
         with get_db() as conn:
             conn.execute("UPDATE cache_meta SET rebuild_state='idle', sync_type='idle' WHERE id=1")
         raise
@@ -320,7 +320,7 @@ def _delta_sync_worker():
             )
 
         # Step 1: collect all S3 image keys
-        log.info("[Delta] Scanne S3-Bucket '%s'...", BUCKET_NAME)
+        log.info("[Delta] Scanning S3 bucket '%s'...", BUCKET_NAME)
         s3_keys = set()
         current_prefix = None
         paginator = s3.get_paginator('list_objects_v2')
@@ -331,9 +331,9 @@ def _delta_sync_worker():
                     prefix = key.rsplit('/', 1)[0] + '/' if '/' in key else ''
                     if prefix != current_prefix:
                         current_prefix = prefix
-                        log.info("[Delta] Verzeichnis: %s", current_prefix or '/')
+                        log.info("[Delta] Directory: %s", current_prefix or '/')
                     s3_keys.add(key)
-        log.info("[Delta] %d Bilder auf S3 gefunden.", len(s3_keys))
+        log.info("[Delta] %d images found on S3.", len(s3_keys))
 
         # Step 2: get cached keys
         with get_db() as conn:
@@ -344,14 +344,14 @@ def _delta_sync_worker():
         to_add = sorted(s3_keys - db_keys)
         to_remove = db_keys - s3_keys
         total = len(to_add) + len(to_remove)
-        log.info("[Delta] %d neu hinzufügen, %d verwaiste löschen.", len(to_add), len(to_remove))
+        log.info("[Delta] Adding %d new, deleting %d orphans.", len(to_add), len(to_remove))
         _set_progress(0, total)
 
         progress = 0
 
         # Step 4: remove orphaned thumbnails + file_index entries
         if to_remove:
-            log.info("[Delta] Lösche %d verwaiste Thumbnails...", len(to_remove))
+            log.info("[Delta] Deleting %d orphaned thumbnails...", len(to_remove))
         with get_db() as conn:
             for key in to_remove:
                 conn.execute("DELETE FROM thumbnails WHERE key=?", (key,))
@@ -361,7 +361,7 @@ def _delta_sync_worker():
 
         # Step 5: add missing thumbnails + file_index entries
         if to_add:
-            log.info("[Delta] Erstelle %d neue Thumbnails...", len(to_add))
+            log.info("[Delta] Creating %d new thumbnails...", len(to_add))
         current_prefix = None
         for key in to_add:
             prefix = key.rsplit('/', 1)[0] + '/' if '/' in key else ''
@@ -385,7 +385,7 @@ def _delta_sync_worker():
                         (prefix, key, name)
                     )
             except Exception as e:
-                log.error("[Delta] Fehler bei '%s': %s", key, e)
+                log.error("[Delta] Error at '%s': %s", key, e)
             progress += 1
             _set_progress(progress, total)
 
@@ -404,10 +404,10 @@ def _delta_sync_worker():
                 "UPDATE cache_meta SET last_rebuilt=?, total_images=?, rebuild_state='idle', sync_type='idle' WHERE id=1",
                 (datetime.now(timezone.utc).isoformat(), total_count)
             )
-        log.info("[Delta] Fertig. %d Thumbnails im Cache.", total_count)
+        log.info("[Delta] Done. %d thumbnails in cache.", total_count)
 
     except Exception as e:
-        log.error("[Delta] Abgebrochen mit Fehler: %s", e)
+        log.error("[Delta] Aborted with error: %s", e)
         with get_db() as conn:
             conn.execute("UPDATE cache_meta SET rebuild_state='idle', sync_type='idle' WHERE id=1")
         raise
@@ -479,6 +479,11 @@ def stats():
         avg_row = conn.execute("SELECT AVG(LENGTH(thumb)) FROM thumbnails").fetchone()
         avg_kb = f"{(avg_row[0] or 0) / 1024:.2f} KB"
 
+        # Get file counts per prefix from the file index
+        rows = conn.execute("SELECT prefix, COUNT(*) as count FROM file_index GROUP BY prefix").fetchall()
+        folder_counts = {r['prefix']: r['count'] for r in rows}
+
+    folder_tree = get_folder_tree()
     cache = get_cache_status()
     return render_template('stats.html',
                            db_size=size_mb,
@@ -486,4 +491,6 @@ def stats():
                            folder_count=folder_count,
                            avg_thumb_kb=avg_kb,
                            last_rebuilt=cache['last_rebuilt'],
-                           total_images_meta=cache['total_images'])
+                           total_images_meta=cache['total_images'],
+                           folder_tree=folder_tree,
+                           folder_counts=folder_counts)

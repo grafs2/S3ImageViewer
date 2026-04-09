@@ -2,14 +2,14 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <title>S3 Bildgalerie: {{ bucket }}</title>
+  <title>S3 Image Gallery: {{ bucket }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <div class="layout">
 
     <aside class="sidebar" data-current-prefix="{{ current_prefix }}">
-      <h2>Ordner</h2>
+      <h2>Folders</h2>
       {% macro render_tree(nodes) %}
         <ul>
           {% for node in nodes %}
@@ -42,18 +42,18 @@
 
       <div class="cache-bar">
         <span class="cache-info">
-          Cache: {{ cache.total_images }} Bilder
-          &mdash; Zuletzt aktualisiert: {{ cache.last_rebuilt }}
+          Cache: {{ cache.total_images }} images
+          &mdash; Last updated: {{ cache.last_rebuilt }}
         </span>
 
         {% if cache.rebuild_state == 'running' %}
           <div class="sync-progress" id="sync-progress">
             <span class="sync-label" id="sync-label">
-              {% if cache.sync_type == 'delta' %}Delta Sync{% else %}Vollständiger Aufbau{% endif %}
+              {% if cache.sync_type == 'delta' %}Delta Sync{% else %}Full Rebuild{% endif %}
               {% if cache.progress_total > 0 %}
                 &mdash; {{ cache.progress_current }} / {{ cache.progress_total }}
               {% else %}
-                &mdash; Scanne S3&hellip;
+                &mdash; Scanning S3&hellip;
               {% endif %}
             </span>
             {% if cache.progress_total > 0 %}
@@ -68,13 +68,13 @@
             {% endif %}
           </div>
         {% else %}
-          <form method="post" action="{{ url_for('delta_sync') }}" style="display:inline">
+          <form method="post" action="{{ url_for('delta_sync') }}" style="display:inline" onsubmit="return confirm('Start Delta Sync? This will check for new and removed images.');">
             <input type="hidden" name="prefix" value="{{ current_prefix }}">
             <button type="submit" class="delta-btn">Delta Sync</button>
           </form>
-          <form method="post" action="{{ url_for('rebuild') }}" style="display:inline">
+          <form method="post" action="{{ url_for('rebuild') }}" style="display:inline" onsubmit="return confirm('Start Full Rebuild? This will delete all cached data and regenerate everything. It might take a long time.');">
             <input type="hidden" name="prefix" value="{{ current_prefix }}">
-            <button type="submit" class="rebuild-btn">Cache aufbauen</button>
+            <button type="submit" class="rebuild-btn">Full Rebuild</button>
           </form>
           <a href="{{ url_for('stats') }}" class="stats-btn">DB Stats</a>
         {% endif %}
@@ -96,7 +96,7 @@
           {% endfor %}
         </div>
       {% else %}
-        <p>Keine Bilder in diesem Ordner.</p>
+        <p>No images in this folder.</p>
       {% endif %}
 
     </main>
@@ -167,14 +167,14 @@
               return;
             }
 
-            var syncName = d.sync_type === 'delta' ? 'Delta Sync' : 'Vollständiger Aufbau';
+            var syncName = d.sync_type === 'delta' ? 'Delta Sync' : 'Full Rebuild';
             if (d.progress_total > 0) {
               var pct = Math.round(d.progress_current / d.progress_total * 100);
               labelEl.textContent = syncName + ' \u2014 ' + d.progress_current + ' / ' + d.progress_total + ' (' + pct + '%)';
               fillEl.classList.remove('progress-indeterminate');
               fillEl.style.width = pct + '%';
             } else {
-              labelEl.textContent = syncName + ' \u2014 Scanne S3\u2026';
+              labelEl.textContent = syncName + ' \u2014 Scanning S3\u2026';
               fillEl.classList.add('progress-indeterminate');
               fillEl.style.width = '';
             }

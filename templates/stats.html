@@ -43,6 +43,35 @@
         .back-btn:hover {
             background: #374151;
         }
+        .folder-inventory {
+            margin-top: 2em;
+            border-top: 1px solid #eee;
+            padding-top: 1em;
+        }
+        .folder-inventory h2 {
+            font-size: 1.2em;
+            color: #333;
+        }
+        .folder-tree-stats {
+            font-size: 13px;
+            color: #444;
+        }
+        .folder-tree-stats ul {
+            list-style: none;
+            padding-left: 1.5em;
+            margin: 0.5em 0;
+        }
+        .folder-tree-stats > ul {
+            padding-left: 0;
+        }
+        .count-badge {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #6b7280;
+            margin-left: 6px;
+        }
     </style>
 </head>
 <body>
@@ -56,6 +85,33 @@
             <tr><td>Last Full Sync</td><td>{{ last_rebuilt }}</td></tr>
             <tr><td>Total Metadata Entries</td><td>{{ total_images_meta }}</td></tr>
         </table>
+
+        <div class="folder-inventory">
+            <h2>Folder Inventory</h2>
+            <div class="folder-tree-stats">
+                {% macro render_stats_tree(nodes) %}
+                    <ul>
+                        {% for node in nodes %}
+                            <li>
+                                {{ node.name }}
+                                <span class="count-badge">{{ folder_counts.get(node.path, 0) }} files</span>
+                                {% if node.children %}
+                                    {{ render_stats_tree(node.children) }}
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endmacro %}
+                <ul>
+                    <li>
+                        <strong>/ (Root)</strong>
+                        <span class="count-badge">{{ folder_counts.get('', 0) }} files</span>
+                        {{ render_stats_tree(folder_tree) }}
+                    </li>
+                </ul>
+            </div>
+        </div>
+
         <div class="back-btn-container">
             <a href="{{ url_for('gallery') }}" class="back-btn">← Back to Gallery</a>
         </div>
